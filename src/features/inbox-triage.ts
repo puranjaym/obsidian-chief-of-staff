@@ -1,0 +1,183 @@
+import type { App, TFile } from 'obsidian';
+import type { Email } from '../types';
+import type { OllamaService } from '../services/ollama';
+import type { GmailService } from '../services/gmail';
+import type { SmartConnectionsService } from '../services/smart-connections';
+
+export class InboxTriageFeature {
+  private app: App;
+  private ollama: OllamaService;
+  private gmail: GmailService;
+  private smartConnections: SmartConnectionsService;
+  private inboxNotePath: string;
+  private autoTriageIntervalId: number | null = null;
+
+  constructor(
+    app: App,
+    ollama: OllamaService,
+    gmail: GmailService,
+    smartConnections: SmartConnectionsService,
+    inboxNotePath: string
+  ) {
+    this.app = app;
+    this.ollama = ollama;
+    this.gmail = gmail;
+    this.smartConnections = smartConnections;
+    this.inboxNotePath = inboxNotePath;
+  }
+
+  updateConfig(inboxNotePath: string): void {
+    this.inboxNotePath = inboxNotePath;
+  }
+
+  startAutoTriage(intervalMinutes: number = 60): void {
+    if (this.autoTriageIntervalId) {
+      window.clearInterval(this.autoTriageIntervalId);
+    }
+
+    this.autoTriageIntervalId = window.setInterval(async () => {
+      await this.triageInbox();
+    }, intervalMinutes * 60 * 1000);
+  }
+
+  stopAutoTriage(): void {
+    if (this.autoTriageIntervalId) {
+      window.clearInterval(this.autoTriageIntervalId);
+      this.autoTriageIntervalId = null;
+    }
+  }
+
+  async triageInbox(): Promise<Email[]> {
+    const emails = await this.gmail.fetchUnreadEmails(20);
+    
+    if (emails.length === 0) {
+      await this.writeTriageNote([]);
+      return [];
+    }
+
+    const emailsForClassification = emails.map(e => ({
+      from: e.from,
+      subject: e.subject,
+      snippet: e.snippet
+    }));
+
+    const classifications = await this.ollama.classifyEmails(emailsForClassification);
+
+    const classifiedEmails = emails.map((email, index) => ({
+      ...email,
+      classification: classifications.find(c => c.id === index)?.classification || 'REVIEW'
+    }));
+
+    await this.writeTriageNote(classifiedEmails);
+
+    return classifiedEmails;
+  }
+
+  async draftReply(email: Email, instructions?: string): Promise<string> {
+    const emailBody = await this.gmail.fetchEmailBody(email.id);
+    
+    const searchQueries = [
+      email.from.split('<')[0].trim(),
+      email.subject
+    ];
+    
+    const vaultContext: string[] = [];
+    for (const query of searchQueries) {
+      const notes = await this.smartConnections.getRelatedNotes(query, 2);
+      vaultContext.push(...notes);
+    }
+
+    const draft = await this.ollama.draftEmailReply(
+      {
+        from: email.from,
+        subject: email.subject,
+        body: emailBody
+      },
+      vaultContext.join('\n\n---\n\n'),
+      instructions
+    );
+
+    return draft;
+  }
+
+  private async writeTriageNote(emails: Email[]): Promise<void> {
+    const now = new Date();
+    const timestamp = now.toLocaleString();
+
+    const urgentEmails = emails.filter(e => e.classification === 'URGENT');
+    const reviewEmails = emails.filter(e => e.classification === 'REVIEW');
+    const noiseEmails = emails.filter(e => e.classification === 'NOISE');
+
+    const formatEmail = (e: Email): string => {
+      const date = e.date.toLocaleDateString();
+      return `- [ ] **${e.subject}**
+  - From: ${e.from}
+  - Date: ${date}
+  - Preview: ${e.snippet.substring(0, 100)}...
+  - ID: \`${e.id}\``;
+    };
+
+    const urgentSection = urgentEmails.length > 0 
+      ? `> [!danger] 🔴 URGENT - Requires Immediate Attention\n${urgentEmails.map(e => `> ${formatEmail(e)}`).join('\n>\n')}`
+      : '> [!success] No urgent emails';
+
+    const reviewSection = reviewEmails.length > 0
+      ? `> [!warning] 🟡 REVIEW - Needs Your Response\n${reviewEmails.map(e => `> ${formatEmail(e)}`).join('\n>\n')}`
+      : '> [!success] No emails to review';
+
+    const noiseSection = noiseEmails.length > 0
+      ? `> [!info] 🟢 NOISE - Low Priority\n${noiseEmails.map(e => `> ${formatEmail(e)}`).join('\n>\n')}`
+      : '> [!success] No noise emails';
+
+    const content = `# 📬 Inbox Triage
+
+*Last updated: ${timestamp}*
+
+> [!abstract] Summary
+> - **Total Unread:** ${emails.length}
+> - 🔴 Urgent: ${urgentEmails.length} (${emails.length > 0 ? Math.round(urgentEmails.length / emails.length * 100) : 0}%)
+> - 🟡 Review: ${reviewEmails.length} (${emails.length > 0 ? Math.round(reviewEmails.length / emails.length * 100) : 0}%)
+> - 🟢 Noise: ${noiseEmails.length} (${emails.length > 0 ? Math.round(noiseEmails.length / emails.length * 100) : 0}%)
+
+---
+
+## 🚨 URGENT (${urgentEmails.length})
+
+${urgentSection}
+
+---
+
+## 📖 REVIEW (${reviewEmails.length})
+
+${reviewSection}
+
+---
+
+## 🔇 NOISE (${noiseEmails.length})
+
+<details>
+<summary>Click to expand noise emails</summary>
+
+${noiseSection}
+
+</details>
+
+---
+
+> [!tip] Next Steps
+> - [ ] Address urgent emails first
+> - [ ] Schedule time for review items
+> - [ ] Archive or delete noise
+
+*Generated by AI Chief of Staff*
+`;
+
+    let file = this.app.vault.getAbstractFileByPath(this.inboxNotePath);
+    
+    if (!file) {
+      await this.app.vault.create(this.inboxNotePath, content);
+    } else {
+      await this.app.vault.modify(file as TFile, content);
+    }
+  }
+}

@@ -1,0 +1,233 @@
+Here is the comprehensive **Master Technical Specification & Product Requirements Document** for your Obsidian AI Chief of Staff.
+
+You can copy this directly into Obsidian as your project's "North Star" document.
+
+---
+
+# 📂 Project Artifact: Obsidian AI Chief of Staff (MVP)
+
+**Version:** 1.0 (MVP)
+**Role:** AI-Powered Productivity Orchestrator
+**Architecture:** Local-First (Privacy Centric)
+**Core Dependencies:** Obsidian, Google Workspace, Ollama (Local LLM), Smart Connections Plugin.
+
+---
+
+## 1. Executive Summary
+
+The **Obsidian AI Chief of Staff** is a local-first plugin designed to reclaim executive time. Unlike standard AI assistants that "chat," this system acts as a background orchestration layer. It proactively connects your **internal knowledge** (Obsidian Vault) with your **external obligations** (Google Calendar/Gmail) to automate preparation, triage, and analysis.
+
+**Key Differentiator:** Privacy-first. Your personal notes never leave your machine; they are processed locally by Gemma 2 (via Ollama). Only the final synthesized output interacts with your interfaces.
+
+---
+
+## 2. Product Requirements (MVP)
+
+### Core Capability A: Smart Meeting Prep
+
+**Goal:** Eliminate "cold" starts to meetings.
+
+* **Trigger:** 15 minutes before any calendar event.
+* **Action:**
+1. Fetch event title, description, and attendee list from **Google Calendar**.
+2. Query **Smart Connections** (Vector Store) for relevant past notes/projects.
+3. **Local LLM** synthesizes a "Briefing Note."
+
+
+* **Output:** A new note (or appended section in Daily Note) containing:
+* *Context:* Who is attending? (Bio/History from vault).
+* *History:* Summary of last meeting notes.
+* *Talking Points:* Suggested agenda items based on open tasks.
+
+
+
+### Core Capability B: Inbox Triage & Drafting
+
+**Goal:** Separate signal from noise and reduce drafting time.
+
+* **Trigger:** Manual "Triage Inbox" button or hourly background sync.
+* **Action:**
+1. Fetch unread emails from **Gmail** (incremental sync).
+2. **Local LLM** analyzes headers + snippet (first 200 chars).
+3. Classify into: `URGENT` (requires immediate action), `REVIEW` (read later), `NOISE` (newsletters).
+
+
+* **Output:** A dashboard view (Markdown list) in Obsidian.
+* *Action:* "Draft Reply" button that uses vault context to write a response (e.g., "Check my calendar and say I'm free Tuesday").
+
+
+
+### Core Capability C: Time Resource Audit
+
+**Goal:** Visualize high-level resource allocation.
+
+* **Trigger:** Weekly Review (Manual trigger).
+* **Action:**
+1. Fetch last 7 days of Calendar events.
+2. **Local LLM** or Regex categorizes events (e.g., "Deep Work," "Admin," "External").
+
+
+* **Output:** A Mermaid.js pie chart or table appended to your Weekly Review note showing % time spent per category.
+
+---
+
+## 3. Technical Architecture
+
+### High-Level Diagram
+
+```mermaid
+graph TD
+    User[User] -->|Interact| Obs[Obsidian UI]
+    Obs -->|Read/Write| Vault[Local Vault]
+    
+    subgraph "Plugin Logic"
+        Orch[Orchestrator]
+        Sync[Google Sync Engine]
+        RAG[RAG Controller]
+    end
+    
+    Obs --> Orch
+    Orch --> Sync
+    Orch --> RAG
+    
+    subgraph "Local Intelligence"
+        SC[Smart Connections Plugin]
+        Ollama[Ollama (Gemma 2)]
+    end
+    
+    RAG -->|Query Vectors| SC
+    RAG -->|Generate Text| Ollama
+    
+    subgraph "External World"
+        GCal[Google Calendar API]
+        Gmail[Gmail API]
+    end
+    
+    Sync -->|OAuth 2.0| GCal
+    Sync -->|OAuth 2.0| Gmail
+
+```
+
+### Component Specifications
+
+#### 1. The Intelligence Engine (Local)
+
+* **Provider:** Ollama (running locally on port `11434`).
+* **Model:** `gemma2:9b` (Best balance of logic/speed).
+* **Context Window:** 8192 tokens.
+* **Prompt Strategy:**
+* Use **JSON Mode** for triage (`format: "json"`).
+* **System Prompt:** *"You are a precise Chief of Staff. You value brevity. You do not explain yourself; you execute. When analyzing text, prioritize actionable facts over sentiment."*
+
+
+
+#### 2. The Memory Bank (RAG)
+
+* **Dependency:** [Smart Connections Plugin](https://github.com/brianpetro/obsidian-smart-connections).
+* **Integration Method:** Hook into the global plugin instance.
+```typescript
+// Hook pattern
+const sc = this.app.plugins.plugins["smart-connections"];
+const results = await sc.api.search("Meeting with Client X");
+
+```
+
+
+* **Constraint:** Do not build a new vector store. Reuse existing indices to save resources.
+
+#### 3. The Bridge (Google Integration)
+
+* **Authentication:** OAuth 2.0 (Desktop App flow).
+* *MVP approach:* Manual Copy/Paste token exchange (User clicks link -> Copies code -> Pastes in Settings).
+* *Token Storage:* `plugin.saveData()` (encrypted or obscured if possible, but local JSON for MVP).
+
+
+* **Sync Strategy:** **Incremental Polling**.
+* Store `historyId` (Gmail) and `syncToken` (Calendar).
+* Poll every 15 minutes. If no changes, API returns empty (0 cost).
+* **Rate Limits:** Implement exponential backoff if 429 error occurs.
+
+
+
+---
+
+## 4. Prerequisites & Setup Checklist
+
+Before development begins, ensure the following "Rig" is operational.
+
+### A. Google Cloud Platform (GCP)
+
+* [ ] **Project Created:** `obsidian-chief-of-staff`
+* [ ] **APIs Enabled:** Gmail API, Google Calendar API.
+* [ ] **OAuth Consent:** Set to **External** (Status: Testing). Add your personal Gmail as a "Test User."
+* [ ] **Credentials:** OAuth 2.0 Client ID (Type: Desktop App). Download `client_secret.json`.
+
+### B. Local Environment
+
+* [ ] **Ollama:** Installed and running.
+* Command: `ollama pull gemma2:9b`
+* Test: `curl http://localhost:11434/api/generate -d '{"model": "gemma2:9b", "prompt":"Hello"}'`
+
+
+* [ ] **Obsidian:**
+* Smart Connections plugin installed & **fully indexed**.
+* "Hot Reload" plugin installed for dev velocity.
+
+
+
+### C. Development Stack
+
+* [ ] TypeScript / Node.js
+* [ ] Obsidian API (`obsidian-sample-plugin` repo as template).
+
+---
+
+## 5. Development Roadmap (Phased)
+
+### Phase 1: The "Brain" (Local Only)
+
+* **Goal:** Prove we can read notes and talk to Ollama.
+* **Deliverables:**
+* Plugin Settings Tab (Ollama URL, Model Name).
+* Command: "Summarize Current Note" (sends note content to Gemma 2).
+* Command: "Query Vault" (uses Smart Connections to find related notes + summarizes them).
+
+
+
+### Phase 2: The "Bridge" (Google Auth)
+
+* **Goal:** Securely authenticate and fetch raw data.
+* **Deliverables:**
+* Settings: "Login to Google" button.
+* Function: `fetchCalendarEvents(timeMin, timeMax)` logs events to console.
+* Function: `fetchUnreadEmails()` logs headers to console.
+
+
+
+### Phase 3: The "Orchestrator" (Logic Integration)
+
+* **Goal:** Connect Phase 1 + Phase 2.
+* **Deliverables:**
+* **Meeting Prep Logic:** If event found -> Search Vault -> Generate Brief -> Write to Daily Note.
+* **Triage Logic:** Fetch Emails -> Send headers to Ollama -> Render Markdown list in a designated "Inbox" note.
+
+
+
+---
+
+## 6. Risk Register & Mitigation
+
+| Risk | Impact | Mitigation Strategy |
+| --- | --- | --- |
+| **Ollama Hallucination** | AI invents meeting details. | **Strict Grounding:** System prompt must say "Only use provided context. If unknown, state 'No Data'." |
+| **Context Overflow** | Email thread > 8k tokens. | **Truncation Logic:** Only send the last 3 emails + summary of previous. Use `SmartConnections` to find only top 3 chunks. |
+| **Google Rate Limits** | API Blocking. | **Anti-Polling:** Use `historyId` for incremental updates. Do not sync more than once per 15m. |
+| **Token Expiry** | Sync fails silently. | **Auto-Refresh:** Implement logic to use the `refresh_token` to get a new `access_token` automatically. |
+
+---
+
+## 7. Success Metrics (KPIs)
+
+1. **Time-to-Context:** Reduce time spent searching for "what did we discuss last time?" from ~5 mins to <10 seconds.
+2. **Triage Accuracy:** >80% accuracy in categorizing emails as "Urgent" vs "Noise" (User feedback loop).
+3. **API Efficiency:** Zero "Quota Exceeded" errors in the Google Console.

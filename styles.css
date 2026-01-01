@@ -1,0 +1,31 @@
+/* AI Chief of Staff Plugin Styles */
+
+.ai-cos-modal {
+  padding: 20px;
+}
+
+.ai-cos-modal input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.ai-cos-modal button {
+  margin-top: 10px;
+}
+
+.ai-cos-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ai-cos-success {
+  color: var(--interactive-success);
+}
+
+.ai-cos-error {
+  color: var(--text-error);
+}
