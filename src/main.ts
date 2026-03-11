@@ -12,13 +12,13 @@ import { DEFAULT_SETTINGS, type AIChiefOfStaffSettings } from './types';
 
 export default class AIChiefOfStaffPlugin extends Plugin {
   settings: AIChiefOfStaffSettings = DEFAULT_SETTINGS;
-  
+
   ollamaService!: OllamaService;
   googleAuthService!: GoogleAuthService;
   calendarService!: CalendarService;
   gmailService!: GmailService;
   smartConnectionsService!: SmartConnectionsService;
-  
+
   meetingPrepFeature!: MeetingPrepFeature;
   inboxTriageFeature!: InboxTriageFeature;
   timeAuditFeature!: TimeAuditFeature;
@@ -34,7 +34,7 @@ export default class AIChiefOfStaffPlugin extends Plugin {
     this.registerRibbonIcons();
     this.initializeStatusBar();
     this.addSettingTab(new AIChiefOfStaffSettingTab(this.app, this));
-    
+
     this.app.workspace.onLayoutReady(() => {
       this.startBackgroundTasks();
       this.updateStatusBar();
@@ -45,9 +45,9 @@ export default class AIChiefOfStaffPlugin extends Plugin {
 
   private registerCustomIcons(): void {
     addIcon('meeting-debrief', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg>');
-    
+
     addIcon('inbox-triage', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>');
-    
+
     addIcon('time-audit', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>');
 
     addIcon('daily-briefing', '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>');
@@ -101,11 +101,11 @@ export default class AIChiefOfStaffPlugin extends Plugin {
     this.statusBarItem = this.addStatusBarItem();
     this.statusBarItem.addClass('ai-cos-status');
     this.statusBarItem.setText('AI CoS: Loading...');
-    
+
     this.registerInterval(
       window.setInterval(() => this.refreshStatusBar(), 60000)
     );
-    
+
     setTimeout(() => this.refreshStatusBar(), 2000);
   }
 
@@ -149,7 +149,7 @@ export default class AIChiefOfStaffPlugin extends Plugin {
       this.settings.ollamaUrl,
       this.settings.ollamaModel
     );
-    
+
     this.googleAuthService = new GoogleAuthService(this);
     this.calendarService = new CalendarService(this.googleAuthService);
     this.gmailService = new GmailService(this.googleAuthService);
@@ -233,11 +233,11 @@ export default class AIChiefOfStaffPlugin extends Plugin {
         try {
           const relatedNotes = await this.smartConnectionsService.getRelatedNotes(query, 5);
           const response = await this.ollamaService.queryVaultWithContext(query, relatedNotes);
-          
-          await this.createOrAppendNote('AI Query Results.md', 
+
+          await this.createOrAppendNote('AI Query Results.md',
             `## Query: ${query}\n\n${response}\n\n*Generated: ${new Date().toLocaleString()}*\n\n---\n\n`
           );
-          
+
           new Notice('Query results saved to AI Query Results.md');
         } catch (error) {
           new Notice(`Query failed: ${error}`);
@@ -327,10 +327,10 @@ export default class AIChiefOfStaffPlugin extends Plugin {
 
         try {
           const events = await this.calendarService.fetchTodayEvents();
-          const summary = events.map(e => 
+          const summary = events.map(e =>
             `- ${e.summary} (${e.start.toLocaleTimeString()})`
           ).join('\n');
-          
+
           await this.createOrAppendNote('Today Events.md',
             `# Today's Events\n\n${summary || 'No events today'}\n\n*Fetched: ${new Date().toLocaleString()}*`
           );
@@ -359,6 +359,31 @@ export default class AIChiefOfStaffPlugin extends Plugin {
         }
       }
     });
+    this.addCommand({
+      id: 'install-background-service',
+      name: 'Install Background Service Daemon',
+      callback: () => {
+        new Notice('Installing background service...');
+        try {
+          const { exec } = (window as any).require('child_process');
+          const path = (window as any).require('path');
+          const vaultPath = (this.app.vault.adapter as any).getBasePath();
+          const pluginDir = path.join(vaultPath, '.obsidian/plugins/ai-chief-of-staff/backend');
+
+          exec(`node "${path.join(pluginDir, 'setup-service.mjs')}" "${vaultPath}"`, (error: any, stdout: string, stderr: string) => {
+            if (error) {
+              new Notice('Failed to install service: ' + error.message);
+              console.error(stderr);
+            } else {
+              new Notice('✅ Background service installed successfully!');
+            }
+          });
+        } catch (e) {
+          new Notice('Setup error: ' + String(e));
+        }
+      }
+    });
+
   }
 
   private async generateDailyBriefing(): Promise<void> {
@@ -368,12 +393,12 @@ export default class AIChiefOfStaffPlugin extends Plugin {
 
     const today = new Date();
     const dateStr = today.toISOString().split('T')[0];
-    
+
     const events = await this.calendarService.fetchTodayEvents();
-    
+
     let emails: import('./types').Email[] = [];
     let urgentEmails: import('./types').Email[] = [];
-    
+
     try {
       emails = await this.gmailService.fetchUnreadEmails(10);
       urgentEmails = emails.filter(e => {
@@ -385,17 +410,17 @@ export default class AIChiefOfStaffPlugin extends Plugin {
     }
 
     const upcomingEvents = events.filter(e => e.start && e.start > today).slice(0, 5);
-    
+
     const formatEventTime = (date: Date | undefined): string => {
       if (!date) return '--:--';
       try {
-        return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       } catch {
         return '--:--';
       }
     };
-    
-    const eventsList = upcomingEvents.length > 0 
+
+    const eventsList = upcomingEvents.length > 0
       ? upcomingEvents.map(e => `| ${formatEventTime(e.start)} | ${e.summary || 'Untitled'} | ${e.attendees?.length || 0} |`).join('\n')
       : '| - | No events scheduled | - |';
 
@@ -407,7 +432,7 @@ export default class AIChiefOfStaffPlugin extends Plugin {
       ? `\n> [!warning] Urgent Emails\n${urgentEmails.map(e => `> - **${e.subject || 'No subject'}** from ${(e.from || 'Unknown').split('<')[0].trim()}`).join('\n')}\n`
       : '';
 
-    const firstMeetingInfo = upcomingEvents.length > 0 
+    const firstMeetingInfo = upcomingEvents.length > 0
       ? `${upcomingEvents[0].summary || 'Untitled'} at ${formatEventTime(upcomingEvents[0].start)}`
       : 'None';
 
@@ -448,7 +473,7 @@ ${urgentSection}
       const lastSlash = folderPath.lastIndexOf('/');
       folderPath = lastSlash > 0 ? folderPath.substring(0, lastSlash) : '';
     }
-    
+
     if (folderPath) {
       const folder = this.app.vault.getAbstractFileByPath(folderPath);
       if (!folder) {
@@ -458,7 +483,7 @@ ${urgentSection}
 
     const briefingPath = folderPath ? `${folderPath}/${dateStr}-briefing.md` : `${dateStr}-briefing.md`;
     const existingFile = this.app.vault.getAbstractFileByPath(briefingPath);
-    
+
     if (existingFile) {
       await this.app.vault.modify(existingFile as import('obsidian').TFile, content);
     } else {
@@ -480,7 +505,7 @@ ${urgentSection}
         background: var(--background-primary); padding: 20px; border-radius: 8px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 9999; min-width: 400px;
       `;
-      
+
       modal.innerHTML = `
         <div style="margin-bottom: 15px; font-weight: bold;">${message}</div>
         <input type="text" style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid var(--background-modifier-border);">
@@ -489,32 +514,32 @@ ${urgentSection}
           <button class="submit-btn mod-cta">Submit</button>
         </div>
       `;
-      
+
       const overlay = document.createElement('div');
       overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9998;';
-      
+
       document.body.appendChild(overlay);
       document.body.appendChild(modal);
-      
+
       const input = modal.querySelector('input') as HTMLInputElement;
       input.focus();
-      
+
       const cleanup = () => {
         modal.remove();
         overlay.remove();
       };
-      
+
       modal.querySelector('.cancel-btn')?.addEventListener('click', () => {
         cleanup();
         resolve(null);
       });
-      
+
       modal.querySelector('.submit-btn')?.addEventListener('click', () => {
         const value = input.value.trim();
         cleanup();
         resolve(value || null);
       });
-      
+
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           const value = input.value.trim();
@@ -525,7 +550,7 @@ ${urgentSection}
           resolve(null);
         }
       });
-      
+
       overlay.addEventListener('click', () => {
         cleanup();
         resolve(null);
@@ -535,7 +560,7 @@ ${urgentSection}
 
   private async createOrAppendNote(path: string, content: string): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(path);
-    
+
     if (!file) {
       await this.app.vault.create(path, content);
     } else {

@@ -20,6 +20,10 @@ export class AIChiefOfStaffSettingTab extends PluginSettingTab {
     this.displayGoogleAuthSection(containerEl);
     this.displayPathSettings(containerEl);
     this.displaySchedulingSettings(containerEl);
+    this.displayFeatureToggles(containerEl);
+    this.displayAdvancedLLMConfig(containerEl);
+    this.displayEmailCalendarRules(containerEl);
+    this.displayBackgroundServiceConfig(containerEl);
   }
 
   private displayApiKeysSection(containerEl: HTMLElement): void {
@@ -90,7 +94,7 @@ export class AIChiefOfStaffSettingTab extends PluginSettingTab {
     statusEl.style.marginBottom = '20px';
     statusEl.style.padding = '8px 12px';
     statusEl.style.borderRadius = '4px';
-    
+
     if (hasCredentials) {
       statusEl.style.backgroundColor = 'var(--background-modifier-success)';
       statusEl.style.color = 'var(--text-success)';
@@ -132,11 +136,11 @@ export class AIChiefOfStaffSettingTab extends PluginSettingTab {
         recommendedModels.forEach(model => {
           dropdown.addOption(model.value, model.name);
         });
-        
+
         const currentModel = this.plugin.settings.ollamaModel;
         const isRecommended = recommendedModels.some(m => m.value === currentModel);
         dropdown.setValue(isRecommended ? currentModel : 'custom');
-        
+
         dropdown.onChange(async (value) => {
           if (value !== 'custom') {
             this.plugin.settings.ollamaModel = value;
@@ -150,7 +154,7 @@ export class AIChiefOfStaffSettingTab extends PluginSettingTab {
       });
 
     const isCustomModel = !recommendedModels.some(m => m.value === this.plugin.settings.ollamaModel && m.value !== 'custom');
-    
+
     if (isCustomModel || this.plugin.settings.ollamaModel === '') {
       new Setting(containerEl)
         .setName('Custom Model Name')
@@ -385,6 +389,199 @@ export class AIChiefOfStaffSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.syncInterval = value;
           await this.plugin.saveSettings();
+        }));
+  }
+
+  private displayFeatureToggles(containerEl: HTMLElement): void {
+    containerEl.createEl('h2', { text: '🎛️ Feature Toggles' });
+
+    new Setting(containerEl)
+      .setName('Enable Inbox Triage')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableInboxTriage)
+        .onChange(async (value) => {
+          this.plugin.settings.enableInboxTriage = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Enable Meeting Prep Debriefs')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableMeetingPrep)
+        .onChange(async (value) => {
+          this.plugin.settings.enableMeetingPrep = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Enable Weekly Time Audit')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableTimeAudit)
+        .onChange(async (value) => {
+          this.plugin.settings.enableTimeAudit = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Enable Daily Standup (9 AM)')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableDailyStandup)
+        .onChange(async (value) => {
+          this.plugin.settings.enableDailyStandup = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Enable Evening Journal (9 PM)')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enableEveningJournal)
+        .onChange(async (value) => {
+          this.plugin.settings.enableEveningJournal = value;
+          await this.plugin.saveSettings();
+        }));
+  }
+
+  private displayAdvancedLLMConfig(containerEl: HTMLElement): void {
+    containerEl.createEl('h2', { text: '🧠 Advanced LLM & RAG Configuration' });
+
+    new Setting(containerEl)
+      .setName('Instructions System Prompt Path')
+      .setDesc('Vault path to instructions.md file that defines AI behavior')
+      .addText(text => text
+        .setPlaceholder('Chief of Staff/instructions.md')
+        .setValue(this.plugin.settings.instructionsPath)
+        .onChange(async (value) => {
+          this.plugin.settings.instructionsPath = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Voice Mirroring Style Path')
+      .setDesc('Vault path to a markdown file explaining your writing style')
+      .addText(text => text
+        .setPlaceholder('Chief of Staff/Voice Style.md')
+        .setValue(this.plugin.settings.voiceMirrorPath)
+        .onChange(async (value) => {
+          this.plugin.settings.voiceMirrorPath = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Personal Contacts Folder')
+      .setDesc('Folder for personal people notes')
+      .addText(text => text
+        .setPlaceholder('People/Personal')
+        .setValue(this.plugin.settings.personalContactsFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.personalContactsFolder = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Work Contacts Folder')
+      .setDesc('Folder for work people notes')
+      .addText(text => text
+        .setPlaceholder('People/Work')
+        .setValue(this.plugin.settings.workContactsFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.workContactsFolder = value;
+          await this.plugin.saveSettings();
+        }));
+  }
+
+  private displayEmailCalendarRules(containerEl: HTMLElement): void {
+    containerEl.createEl('h2', { text: '📧 Email & Calendar Rules' });
+
+    new Setting(containerEl)
+      .setName('Archive Threshold (Days)')
+      .setDesc('Emails older than this limit will be batched into the digest')
+      .addText(text => text
+        .setPlaceholder('90')
+        .setValue(this.plugin.settings.archiveThresholdDays?.toString() || '90')
+        .onChange(async (value) => {
+          this.plugin.settings.archiveThresholdDays = parseInt(value, 10) || 90;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Newsletter Domains')
+      .setDesc('Comma-separated domains to process as newsletters')
+      .addTextArea(text => {
+        text
+          .setPlaceholder('substack.com, medium.com')
+          .setValue(this.plugin.settings.newsletterDomains)
+          .onChange(async (value) => {
+            this.plugin.settings.newsletterDomains = value;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.style.width = '100%';
+        text.inputEl.rows = 3;
+      });
+
+    new Setting(containerEl)
+      .setName('Personal Event Keywords')
+      .setDesc('Comma-separated keywords to identify personal meetings (ignored by Work Prep)')
+      .addText(text => text
+        .setPlaceholder('Lunch, Gym, Personal')
+        .setValue(this.plugin.settings.personalEventKeywords)
+        .onChange(async (value) => {
+          this.plugin.settings.personalEventKeywords = value;
+          await this.plugin.saveSettings();
+        }));
+  }
+
+  private displayBackgroundServiceConfig(containerEl: HTMLElement): void {
+    containerEl.createEl('h2', { text: '⚙️ Background Service Daemon' });
+
+    const infoEl = containerEl.createEl('div', { cls: 'setting-item-description' });
+    infoEl.style.marginBottom = '15px';
+    infoEl.style.padding = '10px';
+    infoEl.style.backgroundColor = 'var(--background-secondary)';
+    infoEl.style.borderRadius = '5px';
+    infoEl.innerHTML = `This installs the Native OS Daemon (launchd/cron/schtasks) so AI Chief of Staff runs automatically 
+    in the background, even when Obsidian is closed.`;
+
+    new Setting(containerEl)
+      .setName('Triage Interval (Hours)')
+      .setDesc('How often to run the background triage')
+      .addDropdown(dropdown => dropdown
+        .addOptions({ '1': 'Every Hour', '2': 'Every 2 Hours', '4': 'Every 4 Hours', '8': 'Every 8 Hours' })
+        .setValue(this.plugin.settings.triageIntervalHours?.toString() || '4')
+        .onChange(async (value) => {
+          this.plugin.settings.triageIntervalHours = parseInt(value, 10);
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName('Install Background Service')
+      .setDesc('Generates and registers the background OS task based on your configured times')
+      .addButton(button => button
+        .setButtonText('Install / Update Service')
+        .setCta()
+        .onClick(async () => {
+          button.setButtonText('Installing...');
+          button.setDisabled(true);
+          try {
+            const { exec } = (window as any).require('child_process');
+            const path = (window as any).require('path');
+            const pluginDir = (this.app.vault.adapter as any).getBasePath() + '/.obsidian/plugins/ai-chief-of-staff/backend';
+
+            // Note: Since this executes in Electron, we can run a node command directly
+            exec(`node "${path.join(pluginDir, 'setup-service.mjs')}" "${(this.app.vault.adapter as any).getBasePath()}"`, (error: any, stdout: string, stderr: string) => {
+              if (error) {
+                new Notice('Failed to install service: ' + error.message);
+                console.error(stderr);
+              } else {
+                new Notice('✅ Background service installed successfully!');
+              }
+              button.setButtonText('Install / Update Service');
+              button.setDisabled(false);
+            });
+          } catch (e) {
+            new Notice('Setup error: ' + String(e));
+            button.setButtonText('Install / Update Service');
+            button.setDisabled(false);
+          }
         }));
   }
 }

@@ -13,11 +13,30 @@ export interface AIChiefOfStaffSettings {
   dailyNotePath: string;
   inboxNotePath: string;
   weeklyReviewPath: string;
+
+  enableInboxTriage: boolean;
+  enableMeetingPrep: boolean;
+  enableTimeAudit: boolean;
+  enableDailyStandup: boolean;
+  enableEveningJournal: boolean;
+
+  instructionsPath: string;
+  voiceMirrorPath: string;
+  personalContactsFolder: string;
+  workContactsFolder: string;
+
+  archiveThresholdDays: number;
+  newsletterDomains: string;
+  personalEventKeywords: string;
+
+  triageIntervalHours: number;
+  dailyStandupTime: string;
+  eveningJournalTime: string;
 }
 
 export const DEFAULT_SETTINGS: AIChiefOfStaffSettings = {
   ollamaUrl: 'http://localhost:11434',
-  ollamaModel: 'gemma2:9b',
+  ollamaModel: 'gemma3:4b-it-qat',
   googleClientId: '',
   googleClientSecret: '',
   googleAccessToken: '',
@@ -29,7 +48,26 @@ export const DEFAULT_SETTINGS: AIChiefOfStaffSettings = {
   meetingPrepMinutesBefore: 15,
   dailyNotePath: 'Daily Notes',
   inboxNotePath: 'Inbox Triage.md',
-  weeklyReviewPath: 'Weekly Review.md'
+  weeklyReviewPath: 'Weekly Review.md',
+
+  enableInboxTriage: true,
+  enableMeetingPrep: true,
+  enableTimeAudit: true,
+  enableDailyStandup: true,
+  enableEveningJournal: true,
+
+  instructionsPath: 'Chief of Staff/instructions.md',
+  voiceMirrorPath: 'Chief of Staff/Voice Style.md',
+  personalContactsFolder: 'People/Personal',
+  workContactsFolder: 'People/Work',
+
+  archiveThresholdDays: 90,
+  newsletterDomains: 'substack.com, medium.com',
+  personalEventKeywords: 'Lunch, Gym, Personal',
+
+  triageIntervalHours: 4,
+  dailyStandupTime: '09:00',
+  eveningJournalTime: '21:00',
 };
 
 export interface CalendarEvent {
